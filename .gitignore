@@ -1,0 +1,13 @@
+data
+__pycache__
+runs
+*.pt
+.env
+/model/stats/*.png
+/model/stats/*.txt
+/model/stats/*.pdf
+/model/stats/*.svg
+.idea
+.zed
+*.egg-info
+thesis.pdf

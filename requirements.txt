@@ -1,0 +1,14 @@
+numpy==2.4.4
+pandas==3.0.2
+Pillow==12.2.0
+pyaudio==0.2.14
+python-dotenv==1.2.2
+scikit_learn==1.8.0
+soundfile==0.13.1
+tensorboard==2.20.0
+torch==2.10.0
+torchaudio==2.10.0
+torchmetrics==1.8.2
+tqdm==4.67.1
+transformers==5.0.0
+vosk==0.3.44
