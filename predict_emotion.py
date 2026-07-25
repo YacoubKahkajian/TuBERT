@@ -7,66 +7,66 @@ remains responsive.
 Audio pipeline overview
 -----------------------
 1. **Initialization**
-A PyAudio input stream is opened at 16 kHz, mono, 16-bit
-PCM.  Alongside it, a Vosk speech-recognition model and a
-``StreamingEmotionPredictor`` (wrapping the trained
-multimodal GRU) are loaded.
+   A PyAudio input stream is opened at 16 kHz, mono, 16-bit
+   PCM.  Alongside it, a Vosk speech-recognition model and a
+   ``StreamingEmotionPredictor`` (wrapping the trained
+   multimodal GRU) are loaded.
 
 2. **Voice-activity detection (VAD) loop**
-On every iteration the loop reads a 1024-sample chunk
-(~64 ms) from the microphone and computes its mean absolute
-amplitude.  The amplitude is compared against a threshold
-derived from the user-configured dBFS value:
+   On every iteration the loop reads a 1024-sample chunk
+   (~64 ms) from the microphone and computes its mean absolute
+   amplitude.  The amplitude is compared against a threshold
+   derived from the user-configured dBFS value:
 
-amplitude_threshold = 32767 × 10^(dBFS / 20)
+   amplitude_threshold = 32767 × 10^(dBFS / 20)
 
-If volume > threshold, the chunk is appended to the accumulation
-buffer ``full_audio_chunk`` and ``silent_chunks`` is reset to
-zero.
+   If volume > threshold, the chunk is appended to the accumulation
+   buffer ``full_audio_chunk`` and ``silent_chunks`` is reset to
+   zero.
 
-If volume ≤ threshold and the user was previously speaking,
-``silent_chunks`` is incremented and the chunk is still appended
-so that the tail of the utterance is preserved. Once  ``silent_chunks``
-exceeds the silence threshold count, the accumulated audio is processed.
+   If volume ≤ threshold and the user was previously speaking,
+   ``silent_chunks`` is incremented and the chunk is still appended
+   so that the tail of the utterance is preserved. Once ``silent_chunks``
+   exceeds the silence threshold count, the accumulated audio is processed.
 
 3. **Pre-roll buffer**
-A ``collections.deque`` of the last three raw chunks (``prev_frames``) is
-prepended to the accumulation buffer the moment speech is first detected.
-This gives the transcriber a few frames of audio context from just before
-the microphone level rose, reducing clipped words and increasing
-transcription accuracy.
+   A ``collections.deque`` of the last three raw chunks (``prev_frames``) is
+   prepended to the accumulation buffer the moment speech is first detected.
+   This gives the transcriber a few frames of audio context from just before
+   the microphone level rose, reducing clipped words and increasing
+   transcription accuracy.
 
 4. **Transcription**
-The concatenated utterance is passed to a freshly instantiated
-``KaldiRecognizer`` (Vosk).  ``AcceptWaveform`` processes the raw PCM
-bytes and ``Result()`` returns a JSON object whose ``"text"`` field
-contains the recognised transcript.
+   The concatenated utterance is passed to a freshly instantiated
+   ``KaldiRecognizer`` (Vosk).  ``AcceptWaveform`` processes the raw PCM
+   bytes and ``Result()`` returns a JSON object whose ``"text"`` field
+   contains the recognised transcript.
 
 5. **Emotion inference**
-The raw PCM array is loaded into ``StreamingEmotionPredictor``'s ring
-buffer via ``add_audio``, then ``predict_from_buffer`` writes the buffer
-to a temporary WAV file, extracts MFCC + delta + delta-delta audio
-features with CMVN normalisation, produces a DistilBERT text embedding
-from the transcript, and runs both through the multimodal GRU to yield an
-emotion label, a per-class probability dictionary, and a confidence score.
+   The raw PCM array is loaded into ``StreamingEmotionPredictor``'s ring
+   buffer via ``add_audio``, then ``predict_from_buffer`` writes the buffer
+   to a temporary WAV file, extracts MFCC + delta + delta-delta audio
+   features with CMVN normalisation, produces a DistilBERT text embedding
+   from the transcript, and runs both through the multimodal GRU to yield an
+   emotion label, a per-class probability dictionary, and a confidence score.
 
 6. **Neutral confidence fallback**
-If the top prediction is ``"neutral"`` *and* its confidence is below the
-user-configured neutral threshold, the second-highest ranked emotion is
-used instead.  This prevents the model from defaulting to neutral for
-weakly-expressed emotions and allows users to customize how expressive
-they want their sprite to be.
+   If the top prediction is ``"neutral"`` *and* its confidence is below the
+   user-configured neutral threshold, the second-highest ranked emotion is
+   used instead.  This prevents the model from defaulting to neutral for
+   weakly-expressed emotions and allows users to customise how expressive
+   they want their sprite to be.
 
 7. **Result dispatch**
-The final (emotion, probs, confidence, transcript) tuple is passed to the
-``on_result`` callback, which the GUI uses to update its labels and sprite.
+   The final (emotion, probs, confidence, transcript) tuple is passed to the
+   ``on_result`` callback, which the GUI uses to update its labels and sprite.
 
 Threading model
 ---------------
 ``run_emotion_detection`` blocks its calling thread until ``stop_event`` is
 set.  It must therefore be run on a ``threading.Thread`` (daemon=True is
 recommended).  All communication with the GUI thread goes through the two
-callbacks (``on_result``, ``on_mic_update``) Both callbacks schedule their
+callbacks (``on_result``, ``on_mic_update``).  Both callbacks schedule their
 tkinter mutations with ``root.after(0, ...)`` on the GUI side, so no tkinter
 objects are touched directly from this thread.
 """
@@ -81,6 +81,48 @@ from dotenv import load_dotenv
 from vosk import KaldiRecognizer, Model
 
 from predictor_classes import StreamingEmotionPredictor
+
+
+def setup_models_and_stream():
+    """Initialise the emotion predictor, Vosk model, and PyAudio input stream."""
+    load_dotenv()
+    predictor = StreamingEmotionPredictor(device="cpu", model_path="model/e_best.pt")
+    vosk_model = Model(lang="en-us")
+
+    sample_rate = 16000
+    samples_per_chunk = 1024  # ≈ 64 ms per chunk at 16 kHz
+
+    audio_stream = pyaudio.PyAudio().open(
+        format=pyaudio.paInt16,
+        channels=1,
+        rate=sample_rate,
+        input=True,
+        frames_per_buffer=samples_per_chunk,
+    )
+    audio_stream.start_stream()
+    print("Audio stream initialized")
+    return predictor, vosk_model, audio_stream, sample_rate, samples_per_chunk
+
+
+def transcribe_and_predict(predictor, vosk_model, np_full_audio_chunk):
+    """Transcribe a speech segment and return (emotion, probs, confidence, transcript).
+
+    Loads the utterance into the predictor's ring buffer, transcribes it with
+    Vosk, then runs multimodal emotion inference using audio features and the
+    text embedding.
+    """
+    # Load the utterance into the predictor's ring buffer so that
+    # predict_from_buffer can write it to a temp WAV file.
+    predictor.add_audio(np_full_audio_chunk)
+
+    # Transcribe the utterance using Vosk.
+    rec = KaldiRecognizer(vosk_model, 16000)
+    rec.AcceptWaveform(np_full_audio_chunk.tobytes())
+    transcript_text = json.loads(rec.Result())["text"]
+
+    # Run multimodal emotion inference with audio features + text embedding.
+    emotion, probs, confidence = predictor.predict_from_buffer(transcript_text)
+    return emotion, probs, confidence, transcript_text
 
 
 def run_emotion_detection(
@@ -132,33 +174,18 @@ def run_emotion_detection(
             with confidence below this value, the second-best emotion is
             used instead.
     """
-    # Set up models
-    load_dotenv()
-    predictor = StreamingEmotionPredictor(device="cpu", model_path="model/e_best.pt")
-    vosk_model = Model(lang="en-us")
-
-    sample_rate = 16000
-    samples_per_chunk = 1024
-
-    # Begin recording audio
-    audio_stream = pyaudio.PyAudio().open(
-        format=pyaudio.paInt16,
-        channels=1,
-        rate=sample_rate,
-        input=True,
-        frames_per_buffer=samples_per_chunk,
+    predictor, vosk_model, audio_stream, sample_rate, samples_per_chunk = (
+        setup_models_and_stream()
     )
-    audio_stream.start_stream()
 
     full_audio_chunk = []  # Accumulates PCM chunks for the current utterance.
     prev_frames = deque(maxlen=3)  # Rolling pre-roll buffer: last 3 chunks (~192 ms).
     silent_chunks = 0  # Number of consecutive below-threshold chunks seen.
     is_speaking = False  # VAD state: True while the user is actively talking.
-    print("Audio stream initialized")
 
     while not stop_event.is_set():
         # Read a single chunk from the microphone (non-blocking on overflow).
-        audio_chunk = audio_stream.read(1024, exception_on_overflow=False)
+        audio_chunk = audio_stream.read(samples_per_chunk, exception_on_overflow=False)
         np_audio_chunk = np.frombuffer(audio_chunk, dtype=np.int16)
 
         # Mean absolute amplitude as a proxy for perceived loudness.
@@ -167,6 +194,7 @@ def run_emotion_detection(
         # Convert the dBFS threshold to a linear int16 amplitude for comparison.
         # The slider stores the magnitude as a positive number, so we negate it
         # to recover the negative dBFS value before applying the formula.
+        # dBFS = 20 * log10(amplitude / 32767)  →  amplitude = 32767 * 10^(dBFS/20)
         amplitude_threshold = 32767 * (10 ** ((loudness_threshold.get() * -1) / 20))
 
         if volume > amplitude_threshold:
@@ -207,19 +235,10 @@ def run_emotion_detection(
                     is_speaking = False
                     on_mic_update(is_speaking)
 
-                    # Load the utterance into the predictor's ring buffer so
-                    # that predict_from_buffer can write it to a temp WAV file.
-                    predictor.add_audio(np_full_audio_chunk)
-
-                    # Transcribe the utterance using Vosk.
-                    rec = KaldiRecognizer(vosk_model, 16000)
-                    rec.AcceptWaveform(np_full_audio_chunk.tobytes())
-                    transcript_text = json.loads(rec.Result())
-                    transcript_text = transcript_text["text"]
-
-                    # Run multimodal emotion inference with audio features + text embedding.
-                    emotion, probs, confidence = predictor.predict_from_buffer(
-                        transcript_text
+                    emotion, probs, confidence, transcript_text = (
+                        transcribe_and_predict(
+                            predictor, vosk_model, np_full_audio_chunk
+                        )
                     )
 
                     # Neutral confidence fallback: if the model picks "neutral"
