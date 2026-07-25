@@ -3,10 +3,10 @@ Predictor classes for single-file and streaming real-time emotion inference.
 This module provides two public classes:
 
   * ``EmotionPredictor``: for offline or batch inference over individual audio
-  files paired with their transcriptions.
+    files paired with their transcriptions.
 
   * ``StreamingEmotionPredictor``: for real-time microphone input, using a
-  fixed-length ring buffer and periodic prediction calls.
+    fixed-length ring buffer and periodic prediction calls.
 
 Both classes use the multimodal GRU + DistilBERT architecture
 (``MultiModalEmotionRNN``) and expect audio features that have been
@@ -202,7 +202,7 @@ class StreamingEmotionPredictor:
             model_path : (str | Path)
                 Path to the trained model checkpoint. Defaults to ``"model/best.pt"``.
             device : (str)
-                PyTorch device string — ``'cpu'``, ``'cuda'``, or``'mps'``.  Defaults to ``config.DEVICE``.
+                PyTorch device string — ``'cpu'``, ``'cuda'``, or ``'mps'``.  Defaults to ``config.DEVICE``.
             buffer_duration : (float)
                 Length of the ring buffer in seconds. Determines how many samples of audio are retained for the
                 next prediction.  Defaults to ``3.0``.
@@ -253,7 +253,7 @@ class StreamingEmotionPredictor:
 
         Args:
             audio_chunk : (np.ndarray)
-                1-D float32 array of audio samples at ``self.sample_rate``Hz.
+                1-D float32 array of audio samples at ``self.sample_rate`` Hz.
         """
         chunk_size = len(audio_chunk)
 
@@ -269,7 +269,7 @@ class StreamingEmotionPredictor:
 
         The buffer is serialised to a temporary WAV file.  The
         file is deleted with ``Path.unlink()`` immediately after
-        inference returns, regardless of whether the prediction succeeds
+        inference returns, regardless of whether the prediction succeeds,
         to keep TuBERT moving.
 
         After a successful prediction ``self.current_emotion`` is updated to
@@ -278,7 +278,7 @@ class StreamingEmotionPredictor:
 
         Args:
             transcription : (str)
-                Text transcription of the current utterance
+                Text transcription of the current utterance.
 
         Returns:
             emotion : (str)

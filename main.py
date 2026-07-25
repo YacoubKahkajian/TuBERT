@@ -6,7 +6,7 @@ responsible for:
       - Loudness Threshold: the microphone amplitude level above which
         TuBERT considers the user to be speaking.
       - Silence Threshold: the duration of quiet audio that must elapse
-        after speech before the recorded utterance is considered ready.
+        after speech before the recorded utterance is considered ready
         to be processed.
       - Neutral Threshold: the minimum confidence required for the model's
         "neutral" prediction to be accepted. If the model predicts neutral
@@ -187,7 +187,7 @@ def make_browse(emotion, mouth_open):
 
     Args:
         emotion : (str)
-            The emotion label this sprite slot belongs to
+            The emotion label this sprite slot belongs to.
         mouth_open : (bool)
             ``True`` for the open-mouth variant, ``False`` for
             the closed-mouth variant.
