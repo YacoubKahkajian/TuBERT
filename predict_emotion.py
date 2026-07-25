@@ -84,7 +84,27 @@ from predictor_classes import StreamingEmotionPredictor
 
 
 def setup_models_and_stream():
-    """Initialise the emotion predictor, Vosk model, and PyAudio input stream."""
+    """
+    Initialise the emotion predictor, Vosk model, and PyAudio input stream.
+
+    Returns:
+        predictor : (StreamingEmotionPredictor)
+            Emotion predictor that will recieve audio and predict emotion
+            based on it.
+
+        vosk_model : (vosk.Model)
+            Vosk model which will transcribe the audio.
+
+        audio_stream : (pyaudio.Stream)
+            Pyaudio stream that records microphone input.
+
+        sample_rate : (int)
+            Audio sample rate, 16000 by default.
+
+        samples_per_chunk : (int)
+            Amount of samples in a single frame of a Pyaudio
+            stream, 1024 by default.
+    """
     load_dotenv()
     predictor = StreamingEmotionPredictor(device="cpu", model_path="model/e_best.pt")
     vosk_model = Model(lang="en-us")
@@ -105,11 +125,32 @@ def setup_models_and_stream():
 
 
 def transcribe_and_predict(predictor, vosk_model, np_full_audio_chunk):
-    """Transcribe a speech segment and return (emotion, probs, confidence, transcript).
+    """
+    Transcribe a speech segment and return (emotion, probs, confidence, transcript).
 
-    Loads the utterance into the predictor's ring buffer, transcribes it with
-    Vosk, then runs multimodal emotion inference using audio features and the
-    text embedding.
+    Args:
+        predictor : (StreamingEmotionPredictor)
+            Emotion predictor to send the audio to.
+
+        vosk_model : (vosk.Model)
+             Kaldi model to transcribe the audio.
+
+        np_full_audio_chunk : (np.ndarray)
+             Numpy array representation of the audio to transcribe and
+             predict the emotion of.
+
+    Returns:
+        emotion : (str)
+            Predicted emotion label.
+
+        probs : (dict[str, float])
+            Softmax probability for every emotion in ``config.EMOTIONS``.
+
+        confidence : (float)
+            Softmax probability of the predicted (argmax) emotion.
+
+        transcript_text : (str)
+            Transcribed audio.
     """
     # Load the utterance into the predictor's ring buffer so that
     # predict_from_buffer can write it to a temp WAV file.

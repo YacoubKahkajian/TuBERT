@@ -1,13 +1,12 @@
 """
-Integration with Veadotube, a more technical sequel to
-a popular piece of dedicated PNGTubing software, Veadotube
+This module implements integration with Veadotube, a more technical
+sequel to a popular piece of dedicated PNGTubing software, Veadotube
 Mini, that's currently in early access.
 
-I'm using the WebSocket-based API that Veadotube uses
-to read thresholds set within the app and send the model's
-preditions to it. This client is designed for non-Mini.
-I may make a version for Mini in the future, though it
-would be more difficult since Mini doesn't allow for
+I'm using the WebSocket-based API that Veadotube uses to read
+thresholds set within the app and send the model's preditions to it.
+This client is designed for non-Mini. I may make a version for Mini in
+the future, though it would be more difficult since Mini doesn't allow for
 custom thresholds AFAICT.
 
 You can learn more about both here: https://veado.tube/
@@ -44,7 +43,10 @@ INSTANCE_STALE_SECONDS = 10  # ignore instances whose timestamp is older than th
 
 
 def discover_server() -> str:
-    """Return the first live veadotube server address found in the instances folder."""
+    """
+    Return the IP address of thefirst live veadotube server
+    found in the instances folder.
+    """
     if not INSTANCES_DIR.exists():
         raise RuntimeError(f"Instances folder not found: {INSTANCES_DIR}\n")
 
@@ -91,10 +93,27 @@ def _decode(raw: str) -> dict[str, Any] | None:
 
 
 def _ws_uri(server: str) -> str:
+    """Return the server IP as a WebSocket URL"""
     return f"ws://{server}?n=TuBERT"
 
 
 def _state_payload(node_id: str, inner: dict[str, Any], type: str) -> dict[str, Any]:
+    """
+    Wraps a WS request to Veadotube in the entire required payload.
+
+    Args:
+        node_id : (str)
+            ID of the node that is being viewed or changed.
+
+        inner : (dict[str, Any])
+            Usually of the format {"event": ..., "state": ...},
+            where the value of "event" describes what to do
+            with the node and the value of "state" contains
+            the value to set the node to, if it is being edited.
+
+        type : (str)
+            Datatype of the node being selected.
+    """
     return {
         "event": "payload",
         "type": type,
@@ -108,7 +127,19 @@ async def _send_request(
     msg: str,
     callback=None,
 ) -> dict[str, Any] | None:
-    """Send a WebSocket request to the currently running Veadotube instance"""
+    """
+    Send a WebSocket request to the currently running Veadotube instance.
+
+    Args:
+        server : (str)
+            IP of the WS server where the Veadotube instance is running.
+
+        msg : (str)
+            Message to send to the WS server.
+
+        callback : (dict[str, Any])
+            Optional function to run on response.
+    """
     async with websockets.connect(_ws_uri(server)) as ws:
         await ws.send(msg)
         await ws.recv()  # ACK frame, read and discard
@@ -123,7 +154,20 @@ async def _send_request(
 
 
 async def _state_get(server: str, node_id: str) -> dict[str, Any] | None:
-    """Retrieve the current value of a state WebSocket node with ID `node_id`"""
+    """
+    Retrieve the current value of a state WebSocket node with ID `node_id`
+
+    Args:
+        server : (str)
+            IP of the WS server where the Veadotube instance is running.
+
+        node_id : (str)
+            ID of the node to retrieve the value of. Can be found in
+            Veadotube by clicking on the node.
+
+    Returns:
+        string value with the name of the node's current state.
+    """
     msg = _encode(_state_payload(node_id, {"event": "peek"}, "stateEvents"))
     data = await _send_request(server, msg)
     return data
@@ -133,7 +177,20 @@ async def _int_get(
     server: str,
     node_id: str,
 ) -> int:
-    """Retrieve the current value of a number WebSocket node with ID `node_id`"""
+    """
+    Retrieve the current value of a number WebSocket node with ID `node_id`
+
+    Args:
+        server : (str)
+            IP of the WS server where the Veadotube instance is running.
+
+        node_id : (str)
+            ID of the node to retrieve the value of. Can be found in
+            Veadotube by clicking on the node.
+
+    Returns:
+        int value of the node.
+    """
     msg = _encode(_state_payload(node_id, {"event": "get"}, "number"))
     data = await _send_request(server, msg)
     return data["payload"]["value"]
@@ -144,7 +201,23 @@ async def _bool_get(
     node_id: str,
     callback=None,
 ) -> bool | None:
-    """Retrieve the current value of a boolean WebSocket node with ID `node_id`"""
+    """
+    Retrieve the current value of a boolean WebSocket node with ID `node_id`
+
+    Args:
+        server : (str)
+            IP of the WS server where the Veadotube instance is running.
+
+        node_id : (str)
+            ID of the node to retrieve the value of. Can be found in
+            Veadotube by clicking on the node.
+
+        callback : (dict[str, Any])
+            Optional function to run on response.
+
+    Returns:
+        bool value of the node.
+    """
     msg = _encode(_state_payload(node_id, {"event": "listen"}, "boolean"))
     data = await _send_request(server, msg, callback)
     return data["payload"]["payload"]
@@ -155,7 +228,20 @@ async def _state_set(
     node_id: str,
     value: str,
 ) -> None:
-    """Set the value of a state WebSocket node with ID `node_id` to string `value`"""
+    """
+    Set the value of a state WebSocket node with ID `node_id` to string `value`
+
+    Args:
+        server : (str)
+            IP of the WS server where the Veadotube instance is running.
+
+        node_id : (str)
+            ID of the node to retrieve the value of. Can be found in
+            Veadotube by clicking on the node.
+
+        value : (str)
+            Value to set the node to.
+    """
     msg = _encode(
         _state_payload(node_id, {"event": "set", "state": value}, "stateEvents")
     )
@@ -168,7 +254,20 @@ async def _int_set(
     node_id: str,
     value: int,
 ) -> None:
-    """Set the value of a state WebSocket node with ID `node_id` to int `value`"""
+    """
+    Set the value of a state WebSocket node with ID `node_id` to int `value`
+
+    Args:
+        server : (str)
+            IP of the WS server where the Veadotube instance is running.
+
+        node_id : (str)
+            ID of the node to retrieve the value of. Can be found in
+            Veadotube by clicking on the node.
+
+        value : (int)
+            Value to set the node to.
+    """
     msg = _encode(_state_payload(node_id, {"event": "set", "value": value}, "number"))
     async with websockets.connect(_ws_uri(server)) as ws:
         await ws.send(msg)
@@ -212,12 +311,11 @@ async def main():
 
     while not stop_event.is_set():
         await asyncio.sleep(0)  # yield to event loop so bool_task can run
-        """
-        While Veadotube takes audio input to handle VAD, this client program is
-        the one that actually stores what is being recorded with pyaudio. Once
-        Veadotube detects that the user is done speaking, the recorded audio is
-        then sent to the TuBERT model.
-        """
+
+        # While Veadotube takes audio input to handle VAD, this client program is
+        # the one that actually stores what is being recorded with pyaudio. Once
+        # Veadotube detects that the user is done speaking, the recorded audio is
+        # then sent to the TuBERT model.
         if is_speaking:
             audio_chunk = audio_stream.read(
                 samples_per_chunk, exception_on_overflow=False
