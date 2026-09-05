@@ -1,6 +1,6 @@
 # TuBERT: Multimodal Speech Emotion Recognition For Real-Time Avatar Control
 
-*This project was developed for my senior thesis at Princeton University. The paper will be published soon.*
+*This project was developed for my senior thesis at Princeton University. [Read the paper here.](https://theses-dissertations.princeton.edu/entities/publication/ec12b8d4-846c-4f92-b953-5c08b8b3dcc2)*
 
 ![Screenshot of the TuBERT GUI](/gui.jpg)
 
