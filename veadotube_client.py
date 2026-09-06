@@ -327,7 +327,7 @@ async def main():
                 np_full_audio_chunk = np.array(full_audio_chunk).flatten()
                 full_audio_chunk = []
                 emotion, probs, confidence, transcript_text = transcribe_and_predict(
-                    predictor, vosk_model, np_full_audio_chunk
+                    predictor, vosk_model, np_full_audio_chunk, True
                 )
                 on_result(emotion, probs, confidence, transcript_text)
 

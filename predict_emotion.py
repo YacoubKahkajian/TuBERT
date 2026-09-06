@@ -124,7 +124,7 @@ def setup_models_and_stream():
     return predictor, vosk_model, audio_stream, sample_rate, samples_per_chunk
 
 
-def transcribe_and_predict(predictor, vosk_model, np_full_audio_chunk):
+def transcribe_and_predict(predictor, vosk_model, np_full_audio_chunk, sort_emotions=False):
     """
     Transcribe a speech segment and return (emotion, probs, confidence, transcript).
 
@@ -139,11 +139,15 @@ def transcribe_and_predict(predictor, vosk_model, np_full_audio_chunk):
              Numpy array representation of the audio to transcribe and
              predict the emotion of.
 
+        sort_emotions : (bool)
+             If `True`, returns emotions in a list of tuples,
+             ordered from most to least confident. Default `False`.
+
     Returns:
         emotion : (str)
             Predicted emotion label.
 
-        probs : (dict[str, float])
+        probs : (dict[str, float] | list[tuple[str, float]])
             Softmax probability for every emotion in ``config.EMOTIONS``.
 
         confidence : (float)
@@ -163,6 +167,9 @@ def transcribe_and_predict(predictor, vosk_model, np_full_audio_chunk):
 
     # Run multimodal emotion inference with audio features + text embedding.
     emotion, probs, confidence = predictor.predict_from_buffer(transcript_text)
+    if sort_emotions:
+        probs = sorted(probs.items(), key=lambda x: x[1], reverse=True)
+
     return emotion, probs, confidence, transcript_text
 
 
@@ -278,21 +285,18 @@ def run_emotion_detection(
 
                     emotion, probs, confidence, transcript_text = (
                         transcribe_and_predict(
-                            predictor, vosk_model, np_full_audio_chunk
+                            predictor, vosk_model, np_full_audio_chunk, True
                         )
                     )
 
                     # Neutral confidence fallback: if the model picks "neutral"
                     # but with low confidence, substitute the next best emotion
                     # so borderline utterances get a more expressive result.
-                    sorted_probs = sorted(
-                        probs.items(), key=lambda x: x[1], reverse=True
-                    )
                     if (
                         confidence < (neutral_confidence_threshold.get() / 100)
                         and emotion == "neutral"
                     ):
-                        emotion, confidence = sorted_probs[1]
+                        emotion, confidence = probs[1][0], probs[1][1]
 
                     on_result(emotion, probs, confidence, transcript_text)
 
