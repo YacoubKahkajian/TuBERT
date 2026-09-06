@@ -106,7 +106,7 @@ def setup_models_and_stream():
             stream, 1024 by default.
     """
     load_dotenv()
-    predictor = StreamingEmotionPredictor(device="cpu", model_path="model/e_best.pt")
+    predictor = StreamingEmotionPredictor(device="cpu")
     vosk_model = Model(lang="en-us")
 
     sample_rate = 16000

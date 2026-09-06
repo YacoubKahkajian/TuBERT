@@ -28,7 +28,7 @@ MODELS_DIR = PROJECT_ROOT / "model"
 # Directory for evaluation outputs such as confusion matrices and ablation results.
 STATS_DIR = PROJECT_ROOT / "model" / "stats"
 # File name of the model to use for evaluations
-MODEL_FILENAME = "tubert.pt"
+MODEL_FILENAME = PROJECT_ROOT / "model" / "tubert.pt"
 
 # ── Audio settings ────────────────────────────────────────────────────────────
 SAMPLE_RATE = 16000  # Sampling rate in Hz. Matches both MELD and microphone input.

@@ -190,7 +190,7 @@ class StreamingEmotionPredictor:
 
     def __init__(
         self,
-        model_path="model/best.pt",
+        model_path=config.MODEL_FILENAME,
         device=config.DEVICE,
         buffer_duration=3.0,
         update_interval=1.0,
@@ -200,7 +200,7 @@ class StreamingEmotionPredictor:
 
         Args:
             model_path : (str | Path)
-                Path to the trained model checkpoint. Defaults to ``"model/best.pt"``.
+                Path to the trained model checkpoint. Defaults to ``config.MODEL_FILENAME``.
             device : (str)
                 PyTorch device string — ``'cpu'``, ``'cuda'``, or ``'mps'``.  Defaults to ``config.DEVICE``.
             buffer_duration : (float)
